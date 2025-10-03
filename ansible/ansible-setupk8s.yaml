@@ -1,27 +1,32 @@
+# ansible-playbook restore_ghost.yml -e "cert=<INSTANCE1_ID> conf=<INSTANCE2_ID>"
+# ansible-galaxy collection install community.kubernetes
+# pip install kubernetes
+# pip install openshift
+
 
 - hosts: k8s-master
   become: yes
   tasks:
     - name: Apply storage manifests
       community.kubernetes.k8s:
-        kubeconfig: /path/to/kubeconfig
+        kubeconfig: "{{ cert }}"
         state: present
-        src: /path/to/kube/storage/
+        src: "{{ conf }}/storage/"
 
     - name: Apply secrets
       community.kubernetes.k8s:
-        kubeconfig: /path/to/kubeconfig
+        kubeconfig: "{{ cert }}"
         state: present
-        src: /path/to/kube/secret/
+        src: "{{ conf }}/secret/"
 
     - name: Apply configmaps
       community.kubernetes.k8s:
-        kubeconfig: /path/to/kubeconfig
+        kubeconfig: "{{ cert }}"
         state: present
-        src: /path/to/kube/config/
+        src: "{{ conf }}/config/"
 
     - name: Apply other resources
       community.kubernetes.k8s:
-        kubeconfig: /path/to/kubeconfig
+        kubeconfig: "{{ cert }}"
         state: present
-        src: /path/to/kube/resources/
+        src: "{{ conf }}/resources/"
