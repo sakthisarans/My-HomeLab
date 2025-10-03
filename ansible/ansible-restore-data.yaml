@@ -1,0 +1,52 @@
+# ansible-playbook restore_ghost.yml -e "backup_timestamp=2025_10_03___10_00_00"
+
+---
+- name: Restore Ghost backup
+  hosts: localhost
+  become: yes
+  vars:
+    db_name: "ghost"
+    db_user: "root"
+    db_pass: "sqlsecretbysakthi"
+    db_host: "10.152.183.130"
+    app_data_dir: "/home/sakthi/kubestorage/ghost"
+    backup_dir: "/home/sakthi/backup/ghost/{{ backup_timestamp }}"
+  tasks:
+
+    - name: Ensure backup directory exists
+      stat:
+        path: "{{ backup_dir }}"
+      register: backup_dir_stat
+
+    - name: Fail if backup directory does not exist
+      fail:
+        msg: "Backup directory {{ backup_dir }} does not exist!"
+      when: not backup_dir_stat.stat.exists
+
+    - name: Restore MySQL database
+      mysql_db:
+        name: "{{ db_name }}"
+        state: import
+        target: "{{ backup_dir }}/ghost_db_backup.sql"
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_pass }}"
+        login_host: "{{ db_host }}"
+      become_user: root
+
+    - name: Remove existing Ghost app data
+      file:
+        path: "{{ app_data_dir }}"
+        state: absent
+
+    - name: Restore Ghost application data
+      copy:
+        src: "{{ backup_dir }}/ghost_data/"
+        dest: "{{ app_data_dir }}"
+        owner: sakthi
+        group: sakthi
+        mode: "0755"
+        remote_src: yes
+
+    - name: Completion message
+      debug:
+        msg: "Ghost database and app data restored successfully from {{ backup_dir }}"

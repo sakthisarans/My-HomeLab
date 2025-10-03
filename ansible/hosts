@@ -1,0 +1,15 @@
+[nfs-server]
+nfs-server ansible_host=nfs.local ansible_user=sakthi ansible_become=yes
+
+[k8s-master]
+master ansible_host=master.local ansible_user=sakthi ansible_become=yes
+
+[k8s-workers]
+worker1 ansible_host=slave0.local ansible_user=sakthi ansible_become=yes
+worker2 ansible_host=slave1.local ansible_user=sakthi ansible_become=yes
+
+[k8s-cluster:children]
+k8s-master
+k8s-workers
+
+

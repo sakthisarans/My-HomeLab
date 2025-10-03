@@ -1,0 +1,25 @@
+# ansible-galaxy collection install community.kubernetes
+---
+- hosts: nfs-server
+  become: yes
+  tasks:
+    - name: Install NFS server
+      apt:
+        name: nfs-kernel-server
+        state: present
+    - name: Create export directory
+      file:
+        path: /var/nfs/minio
+        state: directory
+        owner: nobody
+        group: nogroup
+        mode: '0777'
+    - name: Export NFS share
+      lineinfile:
+        path: /etc/exports
+        line: "/var/nfs/minio *(rw,sync,no_subtree_check)"
+        create: yes
+    - name: Restart NFS server
+      service:
+        name: nfs-kernel-server
+        state: restarted
