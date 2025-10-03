@@ -1,0 +1,54 @@
+# ansible-playbook restore_ghost.yml -e "tunnel1_id=<INSTANCE1_ID> tunnel2_id=<INSTANCE2_ID>"
+
+
+- hosts: k8s-master
+  become: yes
+  vars:
+    cloudflare_tunnels:
+      - name: instance1
+        cmd: "/usr/local/bin/cloudflared tunnel --no-autoupdate run {{ tunnel1_id }}"
+      - name: instance2
+        cmd: "/usr/local/bin/cloudflared tunnel --no-autoupdate run {{ tunnel2_id }}"
+
+  tasks:
+    - name: Download Cloudflared Debian package
+      get_url:
+        url: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+        dest: /tmp/cloudflared.deb
+        mode: '0755'
+
+    - name: Install Cloudflared
+      apt:
+        deb: /tmp/cloudflared.deb
+        state: present
+
+    - name: Create Cloudflared systemd services
+      loop: "{{ cloudflare_tunnels }}"
+      loop_control:
+        loop_var: tunnel
+      copy:
+        dest: "/etc/systemd/system/cloudflared-{{ tunnel.name }}.service"
+        content: |
+          [Unit]
+          Description=Cloudflared Tunnel {{ tunnel.name }}
+          After=network.target
+
+          [Service]
+          ExecStart={{ tunnel.cmd }}
+          Restart=on-failure
+          User=root
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      command: systemctl daemon-reload
+
+    - name: Enable and start Cloudflared services
+      loop: "{{ cloudflare_tunnels }}"
+      loop_control:
+        loop_var: tunnel
+      systemd:
+        name: "cloudflared-{{ tunnel.name }}.service"
+        enabled: yes
+        state: started
