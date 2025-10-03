@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-data-pv
+  namespace: immich # Added namespace
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Recycle
+  storageClassName: immich-storage-class
+  nfs:
+    path: /var/nfs/immitch
+    server: nfs.local  # Replace with your actual NFS server IP or hostname
+    readOnly: false
+  # hostPath:
+  #   path: /home/sakthi/kubestorage/immich
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-data-pvc
+  namespace: immich # Added namespace
+spec:
+  storageClassName: immich-storage-class
+  resources:
+    requests:
+      storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany

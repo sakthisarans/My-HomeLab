@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ghost-config
+  namespace: blog
+data:
+  database__client: mysql
+  database__connection__host: mysqlservice
+  database__connection__database: ghost
+  mail__transport: SMTP
+  mail__from: Mail From Tech Blog
+  mail__options__service: SMTP
+  mail__options__host: smtp.gmail.com
+  mail__options__por: "587"
+  url: https://www.techtriohub.site/

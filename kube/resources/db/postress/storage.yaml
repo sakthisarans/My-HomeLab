@@ -1,0 +1,37 @@
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-sql-pv
+  namespace: DB
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  storageClassName: postgres-storage-class
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    path: /var/nfs/pg
+    server: nfs.local  # Replace with your actual NFS server IP or hostname
+    readOnly: false
+  #hostPath:
+   # path: /home/sakthi/kubestorage/postgres
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-sql-pvc
+  namespace: DB
+  labels:
+    app: postgres-sql-pvc
+spec:
+  storageClassName: postgres-storage-class
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi

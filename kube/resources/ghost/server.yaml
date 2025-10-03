@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghost
+  namespace: blog
+spec:
+  selector:
+    matchLabels:
+      app: ghost
+  template:
+    metadata:
+      labels:
+        app: ghost
+    spec:
+      containers:
+      - name: ghost
+        image: ghost:5-alpine
+        envFrom:
+        - configMapRef:
+            name: ghost-config
+        - secretRef:
+            name: ghost-secret
+        resources:
+          limits:
+            memory: "300Mi"
+            cpu: "300m"
+        ports:
+        - containerPort: 2368
+        volumeMounts:
+        - name: ghostdata
+          mountPath: /var/lib/ghost/content
+      volumes:
+      - name: ghostdata
+        persistentVolumeClaim:
+          claimName: ghost-pvc
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ghostservice
+  namespace: blog
+spec:
+  type: LoadBalancer
+  selector:
+    app: ghost
+  ports:
+  - port: 80
+    targetPort: 2368
+

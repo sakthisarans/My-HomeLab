@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portfolio-config
+  namespace: portfolio
+data:
+  AI_ENDPOINT: http://localhost:11434/v1
+  EMBEDDING_MODEL: embeddinggemma:latest
+
+  MINIO_ENDPOINT: localhost:9010
+  BUCKET_NAME: portfolio
+
+  LOGGING_ENABLE_LOG: "true"
+  LOGGING_LOG_FILE_LOCATION: ./logs/portfolio.log
+  LOGGING_LEVEL: DEBUG
+
+  CONTEXT_PATH: /api/v1
+  PORT: "800"
+
+  WEAVIATE_HOST: localhost
+  WEAVIATE_API_PORT: "8080"
+  WEAVIATE_GRPC_PORT: "50051"
+
+  MAIL_SMTP_SERVER: smtp.gmail.com
+  MAIL_SMTP_PORT: "587"
+  MAIL_SCHEDULER_API_ENABLED: "True"
+
+  REDIS_URL: redis://localhost:6379
+  REDIS_CHANNEL: email_channel
+
+  DB: portfolio
+  VISITOR_COLLECTION: visitors
+  USERS_COLLECTION: users
+  DATA_SOURCE_COLLECTION: knowledge
+  CONTENT_COLLECTION: content
+  CONVERSATION_COLLECTION: conversation
+  PROMPT_COLLECTION: prompt

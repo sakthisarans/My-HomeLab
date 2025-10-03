@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio
+  namespace: portfolio
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: portfolio
+  template:
+    metadata:
+      labels:
+        app: portfolio
+    spec:
+      containers:
+      - name: portfolio
+        image: sakthisaran/portfolio_ui_2.0:latest
+        resources:
+          limits:
+            memory: "100Mi"
+            cpu: "150m"
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-service
+  namespace: portfolio
+spec:
+  type: LoadBalancer
+  selector:
+    app: portfolio
+  ports:
+  - port: 80
+    targetPort: 80
