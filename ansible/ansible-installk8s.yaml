@@ -25,7 +25,7 @@
     - name: Enable essential MicroK8s add-ons
       command: >
         microk8s enable dns storage metallb:192.168.1.240-192.168.1.250 metrics-server
-        dashboard ingress prometheus rbac
+        dashboard ingress rbac
       args:
         warn: false
 
