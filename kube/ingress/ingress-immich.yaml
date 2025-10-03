@@ -7,7 +7,7 @@ metadata:
   namespace: immich
 spec:
   rules:
-  - host: nfs.local
+  - host: photos.sakthisaran.in
     http:
       paths:
       - path: /

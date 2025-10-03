@@ -5,7 +5,7 @@ metadata:
   namespace: blog
 spec:
   rules:
-  - host: nfs.local
+  - host: techtriohub.in
     http:
       paths:
       - path: /

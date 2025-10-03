@@ -5,7 +5,31 @@ metadata:
   namespace: blog
 spec:
   rules:
-  - host: nfs.local
+  - host: sakthisaran.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portfolio-service
+            port:
+              number: 80
+      - path: /api/v1/
+        pathType: Prefix
+        backend:
+          service:
+            name:  portfolio-apiservice
+            port:
+              number: 80
+      - path: /v3/
+        pathType: Prefix
+        backend:
+          service:
+            name:  portfolio-apiservice
+            port:
+              number: 80
+  - host: www.sakthisaran.in
     http:
       paths:
       - path: /
