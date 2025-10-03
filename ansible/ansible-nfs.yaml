@@ -1,24 +1,61 @@
-# ansible-galaxy collection install community.kubernetes
+# ansible-playbook restore_ghost.yml -e "storage_device=/dev/sdb"
+
+# How to avoid issues with /dev/sdX device names:
+# Instead of relying on /dev/sdX, use stable identifiers:
+# a) UUID (recommended)
+# Every partition has a unique UUID. Check it with:
+# blkid /dev/sdb1
+# Example output:
+# /dev/sdb1: UUID="123e4567-e89b-12d3-a456-426614174000" TYPE="ext4"
 ---
 - hosts: nfs-server
   become: yes
+  vars:
+    mount_point: /var/nfs
+    uid: 1000
+    gid: 1000
+    dmask: '077'
+    fmask: '077'
+
   tasks:
     - name: Install NFS server
       apt:
         name: nfs-kernel-server
         state: present
-    - name: Create export directory
+
+    - name: Create mount directory
       file:
-        path: /var/nfs/minio
+        path: "{{ mount_point }}"
         state: directory
-        owner: nobody
-        group: nogroup
-        mode: '0777'
+        mode: '0700'
+
+    - name: Get UUID of RAID/NFS volume
+      command: blkid -s UUID -o value {{ storage_device }}
+      register: raid_uuid
+      changed_when: false
+
+    - name: Mount RAID/NFS volume
+      mount:
+        path: "{{ mount_point }}"
+        src: "UUID={{ raid_uuid.stdout }}"
+        fstype: auto
+        opts: "defaults,uid={{ uid }},gid={{ gid }},dmask={{ dmask }},fmask={{ fmask }}"
+        state: mounted
+
+    - name: Ensure mount is persistent in fstab
+      mount:
+        path: "{{ mount_point }}"
+        src: "UUID={{ raid_uuid.stdout }}"
+        fstype: auto
+        opts: "defaults,uid={{ uid }},gid={{ gid }},dmask={{ dmask }},fmask={{ fmask }}"
+        state: present
+
     - name: Export NFS share
       lineinfile:
         path: /etc/exports
-        line: "/var/nfs/minio *(rw,sync,no_subtree_check)"
+        line: "{{ mount_point }} *(rw,sync,no_subtree_check)"
         create: yes
+
     - name: Restart NFS server
       service:
         name: nfs-kernel-server
