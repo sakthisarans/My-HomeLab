@@ -1,83 +1,100 @@
-# My-HomeLab Kubernetes Manifests
+# My-HomeLab Kubernetes & Automation
 
-This repository contains Kubernetes manifests for deploying a personal homelab stack, including blogging, portfolio, photo management, and database services.
+This repository contains everything needed to deploy a personal homelab stack on a Kubernetes cluster (tested with MicroK8s), including NFS storage setup, blogging, portfolio, photo management, and database services. Automation is provided via Ansible.
 
-## Structure
+## Project Structure
 
 ```
+ansible/
+  ansible.yaml      # Ansible playbook for NFS and K8s deployment
 kube/
-  config/      # ConfigMaps for service configuration
-  ingress/     # Ingress resources for routing
-  resources/   # Deployments, Services, PersistentVolumes, etc.
-    db/        # Database resources (MySQL, Postgres, Redis)
-    ghost/     # Ghost blog resources
-    immich/    # Immich photo management resources
-    portfolio/ # Portfolio app resources
-  secret/      # Secrets for sensitive configuration
+  config/           # ConfigMaps for service configuration
+  ingress/          # Ingress resources for routing
+  resources/        # Deployments, Services, PersistentVolumes, etc.
+    db/             # Database resources (MySQL, Postgres, Redis)
+    ghost/          # Ghost blog resources
+    immich/         # Immich photo management resources
+    portfolio/      # Portfolio app resources
+  secret/           # Secrets for sensitive configuration
+Readme.md           # This file
 ```
+
+## Automation & Deployment
+
+- **NFS Storage Setup:**  
+  Automated using Ansible (`ansible/ansible.yaml`). Installs NFS server, exports directories, and restarts services.
+
+- **Kubernetes Manifests Deployment:**  
+  Ansible applies manifests in the following order for reliability:
+  1. Storage (PersistentVolumes, PersistentVolumeClaims)
+  2. Secrets
+  3. ConfigMaps
+  4. All other resources (Deployments, Services, etc.)
+
+- **MicroK8s Support:**  
+  All manifests and automation are compatible with MicroK8s. Use `microk8s kubectl` or configure Ansible to use your MicroK8s kubeconfig.
 
 ## Services
 
-- **Ghost Blog**  
-  - Config: [`kube/config/ghost.yaml`](kube/config/ghost.yaml)  
-  - Secrets: [`kube/secret/ghost.yaml`](kube/secret/ghost.yaml)  
-  - Deployment: [`kube/resources/ghost/server.yaml`](kube/resources/ghost/server.yaml)  
-  - Storage: [`kube/resources/ghost/storage.yaml`](kube/resources/ghost/storage.yaml)  
-  - Ingress: [`kube/ingress/ingress-blog.yaml`](kube/ingress/ingress-blog.yaml)
+- **Ghost Blog:**  
+  - Config, secrets, deployment, storage, ingress
 
-- **Portfolio App**  
-  - Config: [`kube/config/portfolio.yaml`](kube/config/portfolio.yaml)  
-  - Secrets: [`kube/secret/portfolio.yaml`](kube/secret/portfolio.yaml)  
-  - API Deployment: [`kube/resources/portfolio/server.yaml`](kube/resources/portfolio/server.yaml)  
-  - UI Deployment: [`kube/resources/portfolio/ui.yaml`](kube/resources/portfolio/ui.yaml)  
-  - Ingress: [`kube/ingress/ingress-portfolio.yaml`](kube/ingress/ingress-portfolio.yaml)
+- **Portfolio App:**  
+  - Config, secrets, API/UI deployments, ingress
 
-- **Immich (Photo Management)**  
-  - Config: [`kube/config/immich.yaml`](kube/config/immich.yaml)  
-  - Secrets: [`kube/secret/immich.yaml`](kube/secret/immich.yaml)  
-  - Server Deployment: [`kube/resources/immich/server.yaml`](kube/resources/immich/server.yaml)  
-  - ML Deployment: [`kube/resources/immich/ml.yaml`](kube/resources/immich/ml.yaml)  
-  - Storage: [`kube/resources/immich/storage.yaml`](kube/resources/immich/storage.yaml)  
-  - Ingress: [`kube/ingress/ingress-immich.yaml`](kube/ingress/ingress-immich.yaml)
+- **Immich (Photo Management):**  
+  - Config, secrets, server/ML deployments, storage, ingress
 
-- **Databases**
-  - **MySQL**  
-    - Deployment: [`kube/resources/db/mysql/server.yaml`](kube/resources/db/mysql/server.yaml)  
-    - Storage: [`kube/resources/db/mysql/storage.yaml`](kube/resources/db/mysql/storage.yaml)  
-    - Secrets: [`kube/secret/mysql.yaml`](kube/secret/mysql.yaml)
-  - **Postgres**  
-    - Deployment: [`kube/resources/db/postress/server.yaml`](kube/resources/db/postress/server.yaml)  
-    - Storage: [`kube/resources/db/postress/storage.yaml`](kube/resources/db/postress/storage.yaml)  
-    - Secrets: [`kube/secret/postgress.yaml`](kube/secret/postgress.yaml)
-  - **Redis**  
-    - Deployment: [`kube/resources/db/redis/server.yaml`](kube/resources/db/redis/server.yaml)
+- **Databases:**  
+  - MySQL, Postgres, Redis (with storage and secrets)
 
 ## Usage
 
-1. **Configure NFS/hostPath storage** as referenced in the PersistentVolume manifests.
-2. **Apply secrets and configmaps**:
+1. **Edit Ansible Inventory:**  
+   Define your `nfs-server` and `k8s-master` hosts.
+
+2. **Run Ansible Playbook:**  
    ```sh
-   kubectl apply -f kube/secret/
-   kubectl apply -f kube/config/
+   ansible-playbook ansible/ansible.yaml -i <your-inventory>
    ```
-3. **Deploy resources**:
-   ```sh
-   kubectl apply -f kube/resources/
-   ```
-4. **Set up ingress** (ensure your cluster has an ingress controller):
-   ```sh
-   kubectl apply -f kube/ingress/
-   ```
+
+3. **Manual Steps (if not using Ansible):**
+   - Apply storage manifests first:
+     ```sh
+     kubectl apply -f kube/resources/**/storage.yaml
+     ```
+   - Apply secrets:
+     ```sh
+     kubectl apply -f kube/secret/
+     ```
+   - Apply configmaps:
+     ```sh
+     kubectl apply -f kube/config/
+     ```
+   - Apply other resources:
+     ```sh
+     kubectl apply -f kube/resources/
+     ```
+   - Apply ingress:
+     ```sh
+     kubectl apply -f kube/ingress/
+     ```
 
 ## Notes
 
 - Update NFS server addresses and paths in PV manifests as needed.
-- Secrets are base64 encoded.
-- Namespace usage:  
-  - `blog` for Ghost  
-  - `portfolio` for Portfolio  
-  - `immich` for Immich  
+- Secrets must be base64 encoded.
+- Namespace usage:
+  - `blog` for Ghost
+  - `portfolio` for Portfolio
+  - `immich` for Immich
   - `DB` for databases
+
+## Requirements
+
+- MicroK8s or any Kubernetes cluster
+- Ansible (with `community.kubernetes` collection)
+- NFS server (automated setup via Ansible)
 
 ## License
 
