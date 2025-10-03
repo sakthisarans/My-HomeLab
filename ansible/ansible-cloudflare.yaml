@@ -13,7 +13,7 @@
   tasks:
     - name: Download Cloudflared Debian package
       get_url:
-        url: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+        url: https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
         dest: /tmp/cloudflared.deb
         mode: '0755'
 
