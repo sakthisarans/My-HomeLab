@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: n8n-ingress
+spec:
+  rules:
+  - host: n8n.sakthisaran.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: n8n
+            port:
+              number: 80

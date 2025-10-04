@@ -1,0 +1,51 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  
+    
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      labels:
+        app: n8n
+    spec:
+      containers:
+        - name: n8n
+          image: n8nio/n8n:latest
+          ports:
+            - containerPort: 5678
+          envFrom:
+            - configMapRef:
+                name: n8n-config
+            - secretRef:
+                name: n8n-secret
+          volumeMounts:
+            - name: n8n-data
+              mountPath: /home/node/.n8n
+      volumes:
+        - name: n8n-data
+          persistentVolumeClaim:
+            claimName: n8n-pvc
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n
+spec:
+  type: ClusterIP
+  selector:
+    app: n8n
+  ports:
+    - port: 80
+      targetPort: 5678
+      protocol: TCP
+      name: http
+
