@@ -12,7 +12,7 @@ data:
   N8N_EDITOR_BASE_URL: "https://n8n.sakthisaran.in"
   N8N_PUBLIC_URL: "https://n8n.sakthisaran.in"
   DB_TYPE: "postgresdb"
-  DB_POSTGRESDB_HOST: "your-db-hostname"
+  DB_POSTGRESDB_HOST: "postgres-sql-service.db"
   DB_POSTGRESDB_PORT: "5432"
   DB_POSTGRESDB_DATABASE: "n8n"
   N8N_BASIC_AUTH_USER: "sakthisaran"

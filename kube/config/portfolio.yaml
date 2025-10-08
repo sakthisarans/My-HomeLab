@@ -7,7 +7,7 @@ data:
   AI_ENDPOINT: http://localhost:11434/v1
   EMBEDDING_MODEL: embeddinggemma:latest
 
-  MINIO_ENDPOINT: localhost:9010
+  MINIO_ENDPOINT: http://miniomedia.minio:9010
   BUCKET_NAME: portfolio
 
   LOGGING_ENABLE_LOG: "true"
@@ -25,7 +25,7 @@ data:
   MAIL_SMTP_PORT: "587"
   MAIL_SCHEDULER_API_ENABLED: "True"
 
-  REDIS_URL: redis://localhost:6379
+  REDIS_URL: redis://redis.db:6379
   REDIS_CHANNEL: email_channel
 
   DB: portfolio
