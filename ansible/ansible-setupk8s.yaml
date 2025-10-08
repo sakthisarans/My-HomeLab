@@ -1,65 +1,66 @@
 # ansible-playbook restore_ghost.yml -e "cert=/home/sakthi/.kube/config resource=storage"
+# ansible-galaxy collection install community.kubernetes
 
 ---
 - name: Restore Ghost Kubernetes manifests from GitHub
   hosts: k8s-master
-  become: yes
+  become: true
   vars_files:
     - vars.yml
   tasks:
     - name: Ensure git is installed
-      apt:
+      ansible.builtin.apt:
         name: git
         state: present
-        update_cache: yes
+        update_cache: true
 
     - name: Clone or update the Git repository
-      git:
+      ansible.builtin.git:
         repo: "{{ repo_url }}"
         dest: "{{ repo_dir }}"
         version: main   # or specify a tag/branch
-        force: yes
+        force: true
 
     - name: Apply storage manifests
-      community.kubernetes.k8s:
+      kubernetes.core.k8s:
         kubeconfig: "{{ cert }}"
         state: present
         src: "{{ repo_dir }}/storage/"
-      when: 
+      when:
         - ansible_facts['os_family'] is defined
         - resource == "storage"
 
     - name: Apply secrets
-      community.kubernetes.k8s:
+      kubernetes.core.k8s:
         kubeconfig: "{{ cert }}"
         state: present
         src: "{{ repo_dir }}/secret/"
-      when: 
+      when:
         - ansible_facts['os_family'] is defined
         - resource == "secrets"
 
     - name: Apply configmaps
-      community.kubernetes.k8s:
+      kubernetes.core.k8s:
         kubeconfig: "{{ cert }}"
         state: present
         src: "{{ repo_dir }}/config/"
-      when: 
+      when:
         - ansible_facts['os_family'] is defined
         - resource == "configmaps"
 
     - name: Apply resources (deployments, services, etc.)
-      community.kubernetes.k8s:
+      kubernetes.core.k8s:
         kubeconfig: "{{ cert }}"
         state: present
         src: "{{ repo_dir }}/resources/"
-      when: 
+      when:
         - ansible_facts['os_family'] is defined
         - resource == "resources"
     - name: Apply ingress resources
-      community.kubernetes.k8s:
+      kubernetes.core.k8s:
         kubeconfig: "{{ cert }}"
         state: present
         src: "{{ repo_dir }}/ingress/"
-      when: 
+      when:
         - ansible_facts['os_family'] is defined
         - resource == "ingress"

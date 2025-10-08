@@ -13,3 +13,7 @@ k8s-master
 k8s-workers
 
 
+
+#  ansible-galaxy collection install ansible.posix
+# ansible-galaxy collection install kubernetes.core
+# ansible-galaxy collection install community.general

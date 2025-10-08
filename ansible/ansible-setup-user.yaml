@@ -3,10 +3,10 @@
 ---
 - name: Generate kubeconfig for ServiceAccount in MicroK8s
   hosts: k8s-master
-  gather_facts: no
+  gather_facts: false
   vars:
     sa_name: "{{ sa_name | default('sakthi') }}"
-    namespace: "{{ namespace | default('default') }}"
+    kube_namespace: "{{ kube_namespace | default('default') }}"
     role: "{{ role | default('viewer') }}"
     secret_name: "{{ sa_name }}-token"
     kubeconfig_file: "{{ sa_name }}.kubeconfig"
@@ -15,13 +15,13 @@
 
     # ---------------- Namespace ----------------
     - name: Check if namespace exists
-      command: microk8s kubectl get namespace {{ namespace }}
+      ansible.builtin.command: microk8s kubectl get namespace {{ kube_namespace }}
       register: ns_check
       failed_when: false
       changed_when: false
 
     - name: Create namespace if missing
-      command: microk8s kubectl create namespace {{ namespace }}
+      ansible.builtin.command: microk8s kubectl create namespace {{ kube_namespace }}
       when: ns_check.rc != 0
       register: ns_create
       failed_when: false
@@ -29,13 +29,13 @@
 
     # ---------------- ServiceAccount ----------------
     - name: Check if ServiceAccount exists
-      command: microk8s kubectl get sa {{ sa_name }} -n {{ namespace }}
+      ansible.builtin.command: microk8s kubectl get sa {{ sa_name }} -n {{ kube_namespace }}
       register: sa_check
       failed_when: false
       changed_when: false
 
     - name: Create ServiceAccount if missing
-      command: microk8s kubectl create serviceaccount {{ sa_name }} -n {{ namespace }}
+      ansible.builtin.command: microk8s kubectl create serviceaccount {{ sa_name }} -n {{ kube_namespace }}
       when: sa_check.rc != 0
       register: sa_create
       failed_when: false
@@ -43,83 +43,89 @@
 
     # ---------------- Token Secret ----------------
     - name: Create ServiceAccount token Secret YAML (temp)
-      copy:
+      ansible.builtin.copy:
         dest: /tmp/{{ secret_name }}.yaml
         content: |
           apiVersion: v1
           kind: Secret
           metadata:
             name: {{ secret_name }}
-            namespace: {{ namespace }}
+            namespace: {{ kube_namespace }}
             annotations:
               kubernetes.io/service-account.name: {{ sa_name }}
           type: kubernetes.io/service-account-token
+        mode: '0600'
       when: sa_check.rc != 0
 
     - name: Apply token secret
-      command: microk8s kubectl apply -f /tmp/{{ secret_name }}.yaml
+      ansible.builtin.command: microk8s kubectl apply -f /tmp/{{ secret_name }}.yaml
+      changed_when: false
       when: sa_check.rc != 0
 
     - name: Wait for token population
-      wait_for:
+      ansible.builtin.wait_for:
         timeout: 10
         path: /tmp/{{ secret_name }}.yaml
       when: sa_check.rc != 0
 
     # ---------------- Get token and CA ----------------
     - name: Get ServiceAccount token
-      command: >
-        microk8s kubectl get secret {{ secret_name }} -n {{ namespace }}
+      ansible.builtin.command: >
+        microk8s kubectl get secret {{ secret_name }} -n {{ kube_namespace }}
         -o jsonpath='{.data.token}'
       register: token_b64
+      changed_when: false
       failed_when: false
 
     - name: Decode token
-      set_fact:
+      ansible.builtin.set_fact:
         token: "{{ token_b64.stdout | b64decode }}"
 
     - name: Get CA certificate
-      command: >
-        microk8s kubectl get secret {{ secret_name }} -n {{ namespace }}
+      ansible.builtin.command: >
+        microk8s kubectl get secret {{ secret_name }} -n {{ kube_namespace }}
         -o jsonpath='{.data["ca\\.crt"]}'
       register: ca_b64
+      changed_when: false
       failed_when: false
 
     # ---------------- Cluster info ----------------
     - name: Get cluster name
-      command: microk8s kubectl config view --minify -o jsonpath='{.clusters[0].name}'
+      ansible.builtin.command: microk8s kubectl config view --minify -o jsonpath='{.clusters[0].name}'
       register: cluster_name
+      changed_when: false
 
     - name: Get cluster server
-      command: microk8s kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
+      ansible.builtin.command: microk8s kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
       register: cluster_server
+      changed_when: false
 
     # ---------------- Role / RoleBinding ----------------
     - name: Check existing bindings
       block:
         - name: Check admin ClusterRoleBinding
-          command: microk8s kubectl get clusterrolebinding {{ sa_name }}-admin-binding
+          ansible.builtin.command: microk8s kubectl get clusterrolebinding {{ sa_name }}-admin-binding
           register: rb_check_admin
           failed_when: false
           changed_when: false
 
         - name: Check contributor RoleBinding
-          command: microk8s kubectl get rolebinding {{ sa_name }}-contributor-binding -n {{ namespace }}
+          ansible.builtin.command: microk8s kubectl get rolebinding {{ sa_name }}-contributor-binding -n {{ kube_namespace }}
           register: rb_check_contributor
           failed_when: false
           changed_when: false
 
         - name: Check viewer RoleBinding
-          command: microk8s kubectl get rolebinding {{ sa_name }}-viewer-binding -n {{ namespace }}
+          ansible.builtin.command: microk8s kubectl get rolebinding {{ sa_name }}-viewer-binding -n {{ kube_namespace }}
           register: rb_check_viewer
           failed_when: false
           changed_when: false
 
     - name: Create ClusterRoleBinding for admin
-      command: >
+      ansible.builtin.command: >
         microk8s kubectl create clusterrolebinding {{ sa_name }}-admin-binding
         --clusterrole=cluster-admin
-        --serviceaccount={{ namespace }}:{{ sa_name }}
+        --serviceaccount={{ kube_namespace }}:{{ sa_name }}
       when:
         - role == 'admin'
         - rb_check_admin.rc != 0
@@ -128,13 +134,13 @@
       changed_when: "'created' in crb_create.stdout"
 
     - name: Create contributor Role YAML
-      copy:
+      ansible.builtin.copy:
         dest: /tmp/{{ sa_name }}-contributor-role.yaml
         content: |
           apiVersion: rbac.authorization.k8s.io/v1
           kind: Role
           metadata:
-            namespace: {{ namespace }}
+            namespace: {{ kube_namespace }}
             name: {{ sa_name }}-contributor-role
           rules:
             - apiGroups: [""]
@@ -143,21 +149,23 @@
             - apiGroups: [""]
               resources: ["secrets"]
               verbs: []
+        mode: '0600'
       when:
         - role == 'contributor'
         - rb_check_contributor.rc != 0
 
     - name: Apply contributor Role
-      command: microk8s kubectl apply -f /tmp/{{ sa_name }}-contributor-role.yaml
+      ansible.builtin.command: microk8s kubectl apply -f /tmp/{{ sa_name }}-contributor-role.yaml
       when:
         - role == 'contributor'
         - rb_check_contributor.rc != 0
+      changed_when: false
 
     - name: Bind contributor Role to ServiceAccount
-      command: microk8s kubectl create rolebinding {{ sa_name }}-contributor-binding \
+      ansible.builtin.command: microk8s kubectl create rolebinding {{ sa_name }}-contributor-binding \
                --role={{ sa_name }}-contributor-role \
-               --serviceaccount={{ namespace }}:{{ sa_name }} \
-               -n {{ namespace }}
+               --serviceaccount={{ kube_namespace }}:{{ sa_name }} \
+               -n {{ kube_namespace }}
       when:
         - role == 'contributor'
         - rb_check_contributor.rc != 0
@@ -165,33 +173,35 @@
       changed_when: "'created' in stdout"
 
     - name: Create viewer Role YAML
-      copy:
+      ansible.builtin.copy:
         dest: /tmp/{{ sa_name }}-viewer-role.yaml
         content: |
           apiVersion: rbac.authorization.k8s.io/v1
           kind: Role
           metadata:
-            namespace: {{ namespace }}
+            namespace: {{ kube_namespace }}
             name: {{ sa_name }}-viewer-role
           rules:
             - apiGroups: ["*"]
               resources: ["*"]
               verbs: ["get","list","watch"]
+        mode: '0600'
       when:
         - role == 'viewer'
         - rb_check_viewer.rc != 0
 
     - name: Apply viewer Role
-      command: microk8s kubectl apply -f /tmp/{{ sa_name }}-viewer-role.yaml
+      ansible.builtin.command: microk8s kubectl apply -f /tmp/{{ sa_name }}-viewer-role.yaml
       when:
         - role == 'viewer'
         - rb_check_viewer.rc != 0
+      changed_when: false
 
     - name: Bind viewer Role to ServiceAccount
-      command: microk8s kubectl create rolebinding {{ sa_name }}-viewer-binding \
+      ansible.builtin.command: microk8s kubectl create rolebinding {{ sa_name }}-viewer-binding \
                --role={{ sa_name }}-viewer-role \
-               --serviceaccount={{ namespace }}:{{ sa_name }} \
-               -n {{ namespace }}
+               --serviceaccount={{ kube_namespace }}:{{ sa_name }} \
+               -n {{ kube_namespace }}
       when:
         - role == 'viewer'
         - rb_check_viewer.rc != 0
@@ -200,7 +210,7 @@
 
     # ---------------- Kubeconfig ----------------
     - name: Create kubeconfig file
-      copy:
+      ansible.builtin.copy:
         dest: "./{{ kubeconfig_file }}"
         mode: '0600'
         content: |
@@ -216,7 +226,7 @@
             context:
               cluster: {{ cluster_name.stdout }}
               user: {{ sa_name }}
-              namespace: {{ namespace }}
+              namespace: {{ kube_namespace }}
           current-context: {{ sa_name }}-context
           users:
           - name: {{ sa_name }}
@@ -224,21 +234,12 @@
               token: {{ token }}
 
     - name: Display kubeconfig path
-      debug:
+      ansible.builtin.debug:
         msg: "✅ Kubeconfig generated: {{ kubeconfig_file }}"
-
-    - name: Test access
-      command: KUBECONFIG=./{{ kubeconfig_file }} kubectl get pods -n {{ namespace }}
-      register: test_out
-      failed_when: false
-
-    - name: Show test result
-      debug:
-        var: test_out.stdout
 
     # ---------------- Cleanup temp files ----------------
     - name: Cleanup temporary YAMLs
-      file:
+      ansible.builtin.file:
         path: "/tmp/{{ item }}"
         state: absent
       loop:

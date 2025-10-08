@@ -1,25 +1,27 @@
 ---
+# ansible-galaxy collection install community.general
+
 # --- Play 1: Common setup and SSH ---
 - name: Common setup and SSH install
   hosts: k8s-cluster
-  become: yes
+  become: true
   vars_files:
     - vars.yml
   tags: [common, ssh]
   tasks:
     - name: Update apt cache
-      apt:
-        update_cache: yes
+      ansible.builtin.apt:
+        update_cache: true
         cache_valid_time: 3600
 
     - name: Upgrade system packages non-interactively
-      apt:
+      ansible.builtin.apt:
         upgrade: dist
-        autoremove: yes
-        force: yes
+        autoremove: true
+        force: true
 
     - name: Install essential packages
-      apt:
+      ansible.builtin.apt:
         name:
           - openssh-server
           - curl
@@ -27,43 +29,44 @@
         state: present
 
     - name: Ensure SSH service is running
-      systemd:
+      ansible.builtin.systemd:
         name: ssh
         state: started
-        enabled: yes
+        enabled: true
 
 # --- Play 2: Install and configure MicroK8s ---
 - name: Install and configure MicroK8s
   hosts: k8s-cluster
-  become: yes
+  become: true
   vars_files:
     - vars.yml
   tags: [microk8s]
   tasks:
     - name: Ensure snapd is installed
-      apt:
+      ansible.builtin.apt:
         name: snapd
         state: present
-        update_cache: yes
+        update_cache: true
 
     - name: Install MicroK8s
-      snap:
+      community.general.snap:
         name: microk8s
-        classic: yes
+        classic: true
         state: present
         channel: "{{ microk8s_channel }}"
 
     - name: Add user to microk8s group
-      user:
+      ansible.builtin.user:
         name: "{{ ansible_user }}"
         groups: microk8s
-        append: yes
+        append: true
 
     - name: Wait until MicroK8s is ready
-      command: microk8s status --wait-ready
+      ansible.builtin.command: microk8s status --wait-ready
       register: microk8s_status
       retries: 10
       delay: 10
+      changed_when: false
       until: microk8s_status.rc == 0
 
     - name: Enable MicroK8s add-ons individually
@@ -77,7 +80,7 @@
         - rbac
       loop_control:
         loop_var: addon
-      command: microk8s enable {{ addon }}
+      ansible.builtin.command: microk8s enable {{ addon }}
       register: addon_status
       changed_when: "'already enabled' not in addon_status.stdout"
       failed_when: "'error' in addon_status.stdout.lower()"
@@ -85,39 +88,39 @@
 # --- Play 3: Generate join token ---
 - name: Generate join token for workers
   hosts: k8s-master
-  become: yes
+  become: true
   run_once: true
   vars_files:
     - vars.yml
   tags: [microk8s, join]
   tasks:
     - name: Generate join command
-      command: microk8s add-node
+      ansible.builtin.command: microk8s add-node
       register: addnode_output
       changed_when: false
-
     - name: Extract join command
-      set_fact:
-        microk8s_join: "{{ addnode_output.stdout | regex_search('microk8s join[^\\n]*', multiline=True) | first }}"
+      ansible.builtin.set_fact:
+        microk8s_join: "{{ addnode_output.stdout | regex_search('join[^\\n]*', multiline=True) | first }}"
 
     - name: Ensure join command was found
-      fail:
+      ansible.builtin.fail:
         msg: "Join command not found in add-node output"
       when: microk8s_join is not defined or microk8s_join == ""
 
 # --- Play 4: Join worker nodes ---
 - name: Join worker nodes to cluster
   hosts: k8s-workers
-  become: yes
+  become: true
   vars_files:
     - vars.yml
   tags: [microk8s, join]
   tasks:
     - name: Run join command on worker
-      shell: "{{ hostvars[groups['k8s-master'][0]].microk8s_join }}"
+      ansible.builtin.command: "microk8s {{ hostvars[groups['k8s-master'][0]].microk8s_join }}" # noqa: inline-env-var
       register: join_result
       retries: 5
       delay: 10
+      changed_when: "'already joined' not in join_result.stdout"
       until: join_result.rc == 0
       args:
         warn: false
@@ -125,24 +128,24 @@
 # --- Play 5: Install Cloudflared tunnels ---
 - name: Install Cloudflared tunnels
   hosts: k8s-master
-  become: yes
+  become: true
   vars_files:
     - vars.yml
   tags: [cloudflared]
   tasks:
     - name: Validate tunnel IDs provided
-      assert:
+      ansible.builtin.assert:
         that:
           - tunnel1_id is defined
           - tunnel2_id is defined
         fail_msg: "Please set tunnel1_id and tunnel2_id in vars.yml or via -e."
 
     - name: Detect CPU architecture
-      set_fact:
+      ansible.builtin.set_fact:
         cf_arch: "{{ cloudflared_arch_map.get(ansible_architecture, 'amd64') }}"
 
     - name: Download Cloudflared package if missing
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ cloudflared_release_base }}/cloudflared-linux-{{ cf_arch }}.deb"
         dest: /tmp/cloudflared.deb
         mode: '0755'
@@ -150,7 +153,7 @@
       changed_when: cloudflared_download is succeeded
 
     - name: Install Cloudflared
-      apt:
+      ansible.builtin.apt:
         deb: /tmp/cloudflared.deb
         state: present
 
@@ -158,7 +161,7 @@
       loop: "{{ cloudflare_tunnels }}"
       loop_control:
         loop_var: tunnel
-      copy:
+      ansible.builtin.copy:
         dest: "/etc/systemd/system/cloudflared-{{ tunnel.name }}.service"
         content: |
           [Unit]
@@ -175,29 +178,30 @@
         mode: '0644'
 
     - name: Reload systemd daemon once
-      command: systemctl daemon-reload
+      ansible.builtin.systemd:
+        daemon-reload: true
       changed_when: false
 
     - name: Enable and start Cloudflared services
       loop: "{{ cloudflare_tunnels }}"
       loop_control:
         loop_var: tunnel
-      systemd:
+      ansible.builtin.systemd:
         name: "cloudflared-{{ tunnel.name }}.service"
-        enabled: yes
+        enabled: true
         state: started
 
 # --- Optional Cleanup ---
 - name: Cleanup temporary files
   hosts: k8s-master
-  become: yes
+  become: true
   tasks:
     - name: Remove cloudflared .deb
-      file:
+      ansible.builtin.file:
         path: /tmp/cloudflared.deb
         state: absent
 
     - name: Remove cloned repo folder
-      file:
+      ansible.builtin.file:
         path: "{{ repo_dir }}"
         state: absent
