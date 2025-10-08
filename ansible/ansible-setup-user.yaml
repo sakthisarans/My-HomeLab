@@ -2,7 +2,7 @@
 
 ---
 - name: Generate kubeconfig for ServiceAccount in MicroK8s
-  hosts: localhost
+  hosts: k8s-master
   gather_facts: no
   vars:
     sa_name: "{{ sa_name | default('sakthi') }}"
