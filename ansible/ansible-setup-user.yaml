@@ -1,0 +1,247 @@
+# ansible-playbook generate_sa_kubeconfig.yml -e "sa_name=myuser namespace=dev role=contributor"
+
+---
+- name: Generate kubeconfig for ServiceAccount in MicroK8s
+  hosts: localhost
+  gather_facts: no
+  vars:
+    sa_name: "{{ sa_name | default('sakthi') }}"
+    namespace: "{{ namespace | default('default') }}"
+    role: "{{ role | default('viewer') }}"   # viewer, contributor, admin
+    secret_name: "{{ sa_name }}-token"
+    kubeconfig_file: "{{ sa_name }}.kubeconfig"
+
+  tasks:
+
+    # ---------------- Namespace ----------------
+    - name: Check if namespace exists
+      command: microk8s kubectl get namespace {{ namespace }}
+      register: ns_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create namespace if missing
+      command: microk8s kubectl create namespace {{ namespace }}
+      when: ns_check.rc != 0
+      register: ns_create
+      failed_when: false
+      changed_when: "'created' in ns_create.stdout"
+
+    # ---------------- ServiceAccount ----------------
+    - name: Check if ServiceAccount exists
+      command: microk8s kubectl get sa {{ sa_name }} -n {{ namespace }}
+      register: sa_check
+      failed_when: false
+      changed_when: false
+
+    - name: Create ServiceAccount if missing
+      command: microk8s kubectl create serviceaccount {{ sa_name }} -n {{ namespace }}
+      when: sa_check.rc != 0
+      register: sa_create
+      failed_when: false
+      changed_when: "'created' in sa_create.stdout"
+
+    # ---------------- Token Secret ----------------
+    - name: Create ServiceAccount token Secret YAML (temp)
+      copy:
+        dest: /tmp/{{ secret_name }}.yaml
+        content: |
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: {{ secret_name }}
+            namespace: {{ namespace }}
+            annotations:
+              kubernetes.io/service-account.name: {{ sa_name }}
+          type: kubernetes.io/service-account-token
+      when: sa_check.rc != 0
+
+    - name: Apply token secret
+      command: microk8s kubectl apply -f /tmp/{{ secret_name }}.yaml
+      when: sa_check.rc != 0
+
+    - name: Wait for token population
+      wait_for:
+        timeout: 10
+        path: /tmp/{{ secret_name }}.yaml
+      when: sa_check.rc != 0
+
+    # ---------------- Get token and CA ----------------
+    - name: Get ServiceAccount token
+      command: >
+        microk8s kubectl get secret {{ secret_name }} -n {{ namespace }}
+        -o jsonpath='{.data.token}'
+      register: token_b64
+      failed_when: false
+
+    - name: Decode token
+      set_fact:
+        token: "{{ token_b64.stdout | b64decode }}"
+
+    - name: Get CA certificate
+      command: >
+        microk8s kubectl get secret {{ secret_name }} -n {{ namespace }}
+        -o jsonpath='{.data["ca\\.crt"]}'
+      register: ca_b64
+      failed_when: false
+
+    # ---------------- Cluster info ----------------
+    - name: Get cluster name
+      command: microk8s kubectl config view --minify -o jsonpath='{.clusters[0].name}'
+      register: cluster_name
+
+    - name: Get cluster server
+      command: microk8s kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
+      register: cluster_server
+
+    # ---------------- Role / RoleBinding ----------------
+    - name: Check existing bindings
+      block:
+        - name: Check admin ClusterRoleBinding
+          command: microk8s kubectl get clusterrolebinding {{ sa_name }}-admin-binding
+          register: rb_check_admin
+          failed_when: false
+          changed_when: false
+
+        - name: Check contributor RoleBinding
+          command: microk8s kubectl get rolebinding {{ sa_name }}-contributor-binding -n {{ namespace }}
+          register: rb_check_contributor
+          failed_when: false
+          changed_when: false
+
+        - name: Check viewer RoleBinding
+          command: microk8s kubectl get rolebinding {{ sa_name }}-viewer-binding -n {{ namespace }}
+          register: rb_check_viewer
+          failed_when: false
+          changed_when: false
+
+    - name: Create ClusterRoleBinding for admin
+      command: >
+        microk8s kubectl create clusterrolebinding {{ sa_name }}-admin-binding
+        --clusterrole=cluster-admin
+        --serviceaccount={{ namespace }}:{{ sa_name }}
+      when:
+        - role == 'admin'
+        - rb_check_admin.rc != 0
+      register: crb_create
+      failed_when: false
+      changed_when: "'created' in crb_create.stdout"
+
+    - name: Create contributor Role YAML
+      copy:
+        dest: /tmp/{{ sa_name }}-contributor-role.yaml
+        content: |
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          metadata:
+            namespace: {{ namespace }}
+            name: {{ sa_name }}-contributor-role
+          rules:
+            - apiGroups: [""]
+              resources: ["pods","services","deployments"]
+              verbs: ["get","list","create","update","patch"]
+            - apiGroups: [""]
+              resources: ["secrets"]
+              verbs: []
+      when:
+        - role == 'contributor'
+        - rb_check_contributor.rc != 0
+
+    - name: Apply contributor Role
+      command: microk8s kubectl apply -f /tmp/{{ sa_name }}-contributor-role.yaml
+      when:
+        - role == 'contributor'
+        - rb_check_contributor.rc != 0
+
+    - name: Bind contributor Role to ServiceAccount
+      command: microk8s kubectl create rolebinding {{ sa_name }}-contributor-binding \
+               --role={{ sa_name }}-contributor-role \
+               --serviceaccount={{ namespace }}:{{ sa_name }} \
+               -n {{ namespace }}
+      when:
+        - role == 'contributor'
+        - rb_check_contributor.rc != 0
+      failed_when: false
+      changed_when: "'created' in stdout"
+
+    - name: Create viewer Role YAML
+      copy:
+        dest: /tmp/{{ sa_name }}-viewer-role.yaml
+        content: |
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          metadata:
+            namespace: {{ namespace }}
+            name: {{ sa_name }}-viewer-role
+          rules:
+            - apiGroups: ["*"]
+              resources: ["*"]
+              verbs: ["get","list","watch"]
+      when:
+        - role == 'viewer'
+        - rb_check_viewer.rc != 0
+
+    - name: Apply viewer Role
+      command: microk8s kubectl apply -f /tmp/{{ sa_name }}-viewer-role.yaml
+      when:
+        - role == 'viewer'
+        - rb_check_viewer.rc != 0
+
+    - name: Bind viewer Role to ServiceAccount
+      command: microk8s kubectl create rolebinding {{ sa_name }}-viewer-binding \
+               --role={{ sa_name }}-viewer-role \
+               --serviceaccount={{ namespace }}:{{ sa_name }} \
+               -n {{ namespace }}
+      when:
+        - role == 'viewer'
+        - rb_check_viewer.rc != 0
+      failed_when: false
+      changed_when: "'created' in stdout"
+
+    # ---------------- Kubeconfig ----------------
+    - name: Create kubeconfig file
+      copy:
+        dest: "./{{ kubeconfig_file }}"
+        mode: '0600'
+        content: |
+          apiVersion: v1
+          kind: Config
+          clusters:
+          - name: {{ cluster_name.stdout }}
+            cluster:
+              certificate-authority-data: {{ ca_b64.stdout }}
+              server: {{ cluster_server.stdout }}
+          contexts:
+          - name: {{ sa_name }}-context
+            context:
+              cluster: {{ cluster_name.stdout }}
+              user: {{ sa_name }}
+              namespace: {{ namespace }}
+          current-context: {{ sa_name }}-context
+          users:
+          - name: {{ sa_name }}
+            user:
+              token: {{ token }}
+
+    - name: Display kubeconfig path
+      debug:
+        msg: "✅ Kubeconfig generated: {{ kubeconfig_file }}"
+
+    - name: Test access
+      command: KUBECONFIG=./{{ kubeconfig_file }} kubectl get pods -n {{ namespace }}
+      register: test_out
+      failed_when: false
+
+    - name: Show test result
+      debug:
+        var: test_out.stdout
+
+    # ---------------- Cleanup temp files ----------------
+    - name: Cleanup temporary YAMLs
+      file:
+        path: "/tmp/{{ item }}"
+        state: absent
+      loop:
+        - "{{ secret_name }}.yaml"
+        - "{{ sa_name }}-contributor-role.yaml"
+        - "{{ sa_name }}-viewer-role.yaml"

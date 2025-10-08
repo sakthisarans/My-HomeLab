@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nextcloud
+  template:
+    metadata:
+      labels:
+        app: nextcloud
+    spec:
+      containers:
+      - name: nextcloud
+        image: lscr.io/linuxserver/nextcloud:latest
+        ports:
+        - containerPort: 443
+        envFrom:
+          - secretRef:
+              name: nextcloud-secret
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: "Asia/Kolkata"
+        volumeMounts:
+        - mountPath: /config
+          name: nextcloud-config
+        - mountPath: /data
+          name: nextcloud-data
+      volumes:
+      - name: nextcloud-config
+        persistentVolumeClaim:
+          claimName: nextcloud-config-pvc
+      - name: nextcloud-data
+        persistentVolumeClaim:
+          claimName: nextcloud-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  ports:
+  - port: 80
+    targetPort: 443
+  selector:
+    app: nextcloud
+  type: ClusterIP

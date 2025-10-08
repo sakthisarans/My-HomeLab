@@ -12,7 +12,7 @@ spec:
   persistentVolumeReclaimPolicy: Recycle
   storageClassName: immich-storage-class
   nfs:
-    path: /var/nfs/immitch
+    path: /var/nfs/photos/immitch
     server: nfs.local  # Replace with your actual NFS server IP or hostname
     readOnly: false
   # hostPath:

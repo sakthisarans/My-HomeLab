@@ -12,8 +12,10 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Recycle
   storageClassName: ghost-data
-  hostPath:
-    path: /home/sakthi/kubestorage/ghost/data
+  nfs:
+    path: /var/nfs/appdata/ghost
+    server: nfs.local
+    readOnly: false
 
 ---
 

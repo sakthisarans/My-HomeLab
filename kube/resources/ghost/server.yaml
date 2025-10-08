@@ -42,7 +42,7 @@ metadata:
   name: ghostservice
   namespace: blog
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: ghost
   ports:

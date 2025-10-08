@@ -27,7 +27,7 @@ kind: Service
 metadata:
   name: portfolio-apiservice
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: portfolio-api
   ports:

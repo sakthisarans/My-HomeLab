@@ -1,0 +1,203 @@
+---
+# --- Play 1: Common setup and SSH ---
+- name: Common setup and SSH install
+  hosts: k8s-cluster
+  become: yes
+  vars_files:
+    - vars.yml
+  tags: [common, ssh]
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade system packages non-interactively
+      apt:
+        upgrade: dist
+        autoremove: yes
+        force: yes
+
+    - name: Install essential packages
+      apt:
+        name:
+          - openssh-server
+          - curl
+          - ca-certificates
+        state: present
+
+    - name: Ensure SSH service is running
+      systemd:
+        name: ssh
+        state: started
+        enabled: yes
+
+# --- Play 2: Install and configure MicroK8s ---
+- name: Install and configure MicroK8s
+  hosts: k8s-cluster
+  become: yes
+  vars_files:
+    - vars.yml
+  tags: [microk8s]
+  tasks:
+    - name: Ensure snapd is installed
+      apt:
+        name: snapd
+        state: present
+        update_cache: yes
+
+    - name: Install MicroK8s
+      snap:
+        name: microk8s
+        classic: yes
+        state: present
+        channel: "{{ microk8s_channel }}"
+
+    - name: Add user to microk8s group
+      user:
+        name: "{{ ansible_user }}"
+        groups: microk8s
+        append: yes
+
+    - name: Wait until MicroK8s is ready
+      command: microk8s status --wait-ready
+      register: microk8s_status
+      retries: 10
+      delay: 10
+      until: microk8s_status.rc == 0
+
+    - name: Enable MicroK8s add-ons individually
+      loop:
+        - dns
+        - storage
+        - "metallb:{{ metallb_range }}"
+        - metrics-server
+        - dashboard
+        - ingress
+        - rbac
+      loop_control:
+        loop_var: addon
+      command: microk8s enable {{ addon }}
+      register: addon_status
+      changed_when: "'already enabled' not in addon_status.stdout"
+      failed_when: "'error' in addon_status.stdout.lower()"
+
+# --- Play 3: Generate join token ---
+- name: Generate join token for workers
+  hosts: k8s-master
+  become: yes
+  run_once: true
+  vars_files:
+    - vars.yml
+  tags: [microk8s, join]
+  tasks:
+    - name: Generate join command
+      command: microk8s add-node
+      register: addnode_output
+      changed_when: false
+
+    - name: Extract join command
+      set_fact:
+        microk8s_join: "{{ addnode_output.stdout | regex_search('microk8s join[^\\n]*', multiline=True) | first }}"
+
+    - name: Ensure join command was found
+      fail:
+        msg: "Join command not found in add-node output"
+      when: microk8s_join is not defined or microk8s_join == ""
+
+# --- Play 4: Join worker nodes ---
+- name: Join worker nodes to cluster
+  hosts: k8s-workers
+  become: yes
+  vars_files:
+    - vars.yml
+  tags: [microk8s, join]
+  tasks:
+    - name: Run join command on worker
+      shell: "{{ hostvars[groups['k8s-master'][0]].microk8s_join }}"
+      register: join_result
+      retries: 5
+      delay: 10
+      until: join_result.rc == 0
+      args:
+        warn: false
+
+# --- Play 5: Install Cloudflared tunnels ---
+- name: Install Cloudflared tunnels
+  hosts: k8s-master
+  become: yes
+  vars_files:
+    - vars.yml
+  tags: [cloudflared]
+  tasks:
+    - name: Validate tunnel IDs provided
+      assert:
+        that:
+          - tunnel1_id is defined
+          - tunnel2_id is defined
+        fail_msg: "Please set tunnel1_id and tunnel2_id in vars.yml or via -e."
+
+    - name: Detect CPU architecture
+      set_fact:
+        cf_arch: "{{ cloudflared_arch_map.get(ansible_architecture, 'amd64') }}"
+
+    - name: Download Cloudflared package if missing
+      get_url:
+        url: "{{ cloudflared_release_base }}/cloudflared-linux-{{ cf_arch }}.deb"
+        dest: /tmp/cloudflared.deb
+        mode: '0755'
+      register: cloudflared_download
+      changed_when: cloudflared_download is succeeded
+
+    - name: Install Cloudflared
+      apt:
+        deb: /tmp/cloudflared.deb
+        state: present
+
+    - name: Create systemd services for Cloudflared tunnels
+      loop: "{{ cloudflare_tunnels }}"
+      loop_control:
+        loop_var: tunnel
+      copy:
+        dest: "/etc/systemd/system/cloudflared-{{ tunnel.name }}.service"
+        content: |
+          [Unit]
+          Description=Cloudflared Tunnel {{ tunnel.name }}
+          After=network.target
+
+          [Service]
+          ExecStart={{ tunnel.cmd }}
+          Restart=on-failure
+          User=root
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Reload systemd daemon once
+      command: systemctl daemon-reload
+      changed_when: false
+
+    - name: Enable and start Cloudflared services
+      loop: "{{ cloudflare_tunnels }}"
+      loop_control:
+        loop_var: tunnel
+      systemd:
+        name: "cloudflared-{{ tunnel.name }}.service"
+        enabled: yes
+        state: started
+
+# --- Optional Cleanup ---
+- name: Cleanup temporary files
+  hosts: k8s-master
+  become: yes
+  tasks:
+    - name: Remove cloudflared .deb
+      file:
+        path: /tmp/cloudflared.deb
+        state: absent
+
+    - name: Remove cloned repo folder
+      file:
+        path: "{{ repo_dir }}"
+        state: absent

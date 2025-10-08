@@ -15,3 +15,13 @@ spec:
             name: ghostservice
             port:
               number: 80
+  - host: www.techtriohub.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ghostservice
+            port:
+              number: 80

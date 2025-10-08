@@ -11,7 +11,7 @@ spec:
     - ReadWriteMany
   storageClassName: minio-storage
   nfs:
-    path: /var/nfs/minio
+    path: /var/nfs/appdata/minio
     server: nfs.local  
     readOnly: false
 

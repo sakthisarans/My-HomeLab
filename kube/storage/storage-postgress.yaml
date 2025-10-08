@@ -13,11 +13,9 @@ spec:
   storageClassName: postgres-storage-class
   persistentVolumeReclaimPolicy: Retain
   nfs:
-    path: /var/nfs/pg
-    server: nfs.local  # Replace with your actual NFS server IP or hostname
+    path: /var/nfs/db/postgres
+    server: nfs.local 
     readOnly: false
-  #hostPath:
-   # path: /home/sakthi/kubestorage/postgres
 
 ---
 

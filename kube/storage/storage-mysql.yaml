@@ -11,8 +11,10 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Recycle
   storageClassName: mysql-data-claim
-  hostPath:
-    path: /home/sakthi/kubestorage/mysql/data
+  nfs:
+    path: /var/nfs/db/mysql
+    server: nfs.local
+    readOnly: false
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

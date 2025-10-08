@@ -1,32 +1,46 @@
-# ansible-playbook restore_ghost.yml -e "cert=<INSTANCE1_ID> conf=<INSTANCE2_ID>"
-# ansible-galaxy collection install community.kubernetes
-# pip install kubernetes
-# pip install openshift
+# ansible-playbook restore_ghost.yml -e "cert=/home/sakthi/.kube/config"
 
-
-- hosts: k8s-master
+---
+- name: Restore Ghost Kubernetes manifests from GitHub
+  hosts: k8s-master
   become: yes
+  vars_files:
+    - vars.yml
   tasks:
+    - name: Ensure git is installed
+      apt:
+        name: git
+        state: present
+        update_cache: yes
+
+    - name: Clone or update the Git repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ repo_dir }}"
+        version: main   # or specify a tag/branch
+        force: yes
+
     - name: Apply storage manifests
       community.kubernetes.k8s:
         kubeconfig: "{{ cert }}"
         state: present
-        src: "{{ conf }}/storage/"
+        src: "{{ repo_dir }}/storage/"
+      when: ansible_facts['os_family'] is defined
 
     - name: Apply secrets
       community.kubernetes.k8s:
         kubeconfig: "{{ cert }}"
         state: present
-        src: "{{ conf }}/secret/"
+        src: "{{ repo_dir }}/secret/"
 
     - name: Apply configmaps
       community.kubernetes.k8s:
         kubeconfig: "{{ cert }}"
         state: present
-        src: "{{ conf }}/config/"
+        src: "{{ repo_dir }}/config/"
 
-    - name: Apply other resources
+    - name: Apply resources (deployments, services, etc.)
       community.kubernetes.k8s:
         kubeconfig: "{{ cert }}"
         state: present
-        src: "{{ conf }}/resources/"
+        src: "{{ repo_dir }}/resources/"

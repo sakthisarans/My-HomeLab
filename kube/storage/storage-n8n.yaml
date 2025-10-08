@@ -12,7 +12,7 @@ spec:
   storageClassName: n8n-storage-class
   persistentVolumeReclaimPolicy: Retain
   nfs:
-    path: /var/nfs/pg
+    path: /var/nfs/appdata/n8n
     server: nfs.local  
     readOnly: false
 

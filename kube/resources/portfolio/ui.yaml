@@ -30,7 +30,7 @@ metadata:
   name: portfolio-service
   namespace: portfolio
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: portfolio
   ports:
