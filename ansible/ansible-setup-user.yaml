@@ -148,7 +148,7 @@
               verbs: ["get","list","create","update","patch"]
             - apiGroups: [""]
               resources: ["secrets"]
-              verbs: []
+              verbs: [""]
         mode: '0600'
       when:
         - role == 'contributor'
@@ -170,7 +170,7 @@
         - role == 'contributor'
         - rb_check_contributor.rc != 0
       failed_when: false
-      changed_when: "'created' in stdout"
+      changed_when: "'created' in rb_create_contributor.stdout"
 
     - name: Create viewer Role YAML
       ansible.builtin.copy:
