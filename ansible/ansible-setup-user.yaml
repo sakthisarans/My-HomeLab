@@ -7,7 +7,7 @@
   vars:
     sa_name: "{{ sa_name | default('sakthi') }}"
     namespace: "{{ namespace | default('default') }}"
-    role: "{{ role | default('viewer') }}"   # viewer, contributor, admin
+    role: "{{ role | default('viewer') }}"
     secret_name: "{{ sa_name }}-token"
     kubeconfig_file: "{{ sa_name }}.kubeconfig"
 

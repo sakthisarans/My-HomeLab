@@ -1,52 +1,82 @@
+---
 # ansible-playbook restore_ghost.yml -e "backup_timestamp=2025_10_03___10_00_00"
 
----
-- name: Restore Ghost backup
+- name: DB inside MySQL pod, app data to NAS
   hosts: localhost
   become: yes
   vars:
+    backup_dir_local: "/home/sakthi/backup/ghost/{{ backup_timestamp }}"  # Local backup
+    nfs_server_ip: "nfs.local"   
+    nfs_export: "/var/nfs/appdata/ghost"          
+    nfs_mount_dir: "./ghost" 
+    mysql_namespace: "DB"              
+    mysql_label_selector: "app=mysql"  # Label to identify MySQL pod
     db_name: "ghost"
     db_user: "root"
     db_pass: "sqlsecretbysakthi"
-    db_host: "10.152.183.130"
-    app_data_dir: "/home/sakthi/kubestorage/ghost"
-    backup_dir: "/home/sakthi/backup/ghost/{{ backup_timestamp }}"
+
   tasks:
 
-    - name: Ensure backup directory exists
+    - name: Ensure local backup directory exists
       stat:
-        path: "{{ backup_dir }}"
+        path: "{{ backup_dir_local }}"
       register: backup_dir_stat
 
-    - name: Fail if backup directory does not exist
+    - name: Fail if local backup directory does not exist
       fail:
-        msg: "Backup directory {{ backup_dir }} does not exist!"
+        msg: "Backup directory {{ backup_dir_local }} does not exist!"
       when: not backup_dir_stat.stat.exists
 
-    - name: Restore MySQL database
-      mysql_db:
-        name: "{{ db_name }}"
-        state: import
-        target: "{{ backup_dir }}/ghost_db_backup.sql"
-        login_user: "{{ db_user }}"
-        login_password: "{{ db_pass }}"
-        login_host: "{{ db_host }}"
-      become_user: root
+    - name: Get MySQL pod name
+      command: kubectl get pods -n {{ mysql_namespace }} -l {{ mysql_label_selector }} -o jsonpath='{.items[0].metadata.name}'
+      register: mysql_pod
+      changed_when: false
 
-    - name: Remove existing Ghost app data
+    - name: Copy backup SQL to MySQL pod
+      command: kubectl cp {{ backup_dir_local }}/ghost_db_backup.sql {{ mysql_namespace }}/{{ mysql_pod.stdout }}:/tmp/ghost_db_backup.sql
+      register: copy_sql
+      changed_when: false
+
+    - name: Restore MySQL database inside pod
+      command: kubectl exec -n {{ mysql_namespace }} {{ mysql_pod.stdout }} -- \
+               sh -c "mysql -u{{ db_user }} -p{{ db_pass }} {{ db_name }} < /tmp/ghost_db_backup.sql"
+      register: restore_result
+
+    - name: Ensure local NFS mount directory exists
       file:
-        path: "{{ app_data_dir }}"
+        path: "{{ nfs_mount_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Mount NAS export locally
+      mount:
+        src: "{{ nfs_server_ip }}:{{ nfs_export }}"
+        path: "{{ nfs_mount_dir }}"
+        fstype: nfs
+        opts: rw
+        state: mounted
+
+    - name: Remove existing Ghost app data from NAS
+      file:
+        path: "{{ nfs_mount_dir }}"
         state: absent
 
-    - name: Restore Ghost application data
-      copy:
-        src: "{{ backup_dir }}/ghost_data/"
-        dest: "{{ app_data_dir }}"
+    - name: Sync Ghost backup to locally mounted NAS
+      synchronize:
+        src: "{{ backup_dir_local }}/ghost_data/"
+        dest: "{{ nfs_mount_dir }}/"
+        rsync_opts:
+          - "--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
+
+    - name: Ensure correct permissions on NAS
+      file:
+        path: "{{ nfs_mount_dir }}"
+        state: directory
         owner: sakthi
         group: sakthi
+        recurse: yes
         mode: "0755"
-        remote_src: yes
 
     - name: Completion message
       debug:
-        msg: "Ghost database and app data restored successfully from {{ backup_dir }}"
+        msg: "✅ Ghost database restored inside MySQL pod and app data synced to NAS at {{ nfs_mount_dir }}"
