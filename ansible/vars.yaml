@@ -9,8 +9,7 @@ cloudflared_arch_map:
   x86_64: "amd64"
 cloudflared_release_base: "https://github.com/cloudflare/cloudflared/releases/latest/download"
 
-# --- Cloudflare tunnel IDs ---
-# override these at runtime or set permanently here
+
 tunnel1_id: "<TUNNEL_ID_1>"
 tunnel2_id: "<TUNNEL_ID_2>"
 
@@ -20,5 +19,5 @@ cloudflare_tunnels:
   - name: techtriohub
     cmd: "/usr/local/bin/cloudflared tunnel --no-autoupdate run {{ tunnel2_id }}"
 
-repo_url: "https://github.com/yourusername/yourrepo.git" # 🔁 change this
+repo_url: "https://github.com/sakthisarans/My-HomeLab.git" 
 repo_dir: "/tmp/ghost_restore"

@@ -1,12 +1,12 @@
 [nfs-server]
-nfs-server ansible_host=nfs.local ansible_user=sakthi ansible_become=yes
+nfs-server ansible_host=nfs.local ansible_user=sakthi ansible_become=yes ansible_ssh_pass=7177 ansible_become_pass=7177
 
 [k8s-master]
-master ansible_host=master.local ansible_user=sakthi ansible_become=yes
+master ansible_host=master.local ansible_user=sakthi ansible_become=yes ansible_ssh_pass=7177 ansible_become_pass=7177
 
 [k8s-workers]
-worker1 ansible_host=slave0.local ansible_user=sakthi ansible_become=yes
-worker2 ansible_host=slave1.local ansible_user=sakthi ansible_become=yes
+worker1 ansible_host=slave0.local ansible_user=sakthi ansible_become=yes ansible_ssh_pass=7177 ansible_become_pass=7177
+worker2 ansible_host=slave1.local ansible_user=sakthi ansible_become=yes ansible_ssh_pass=7177 ansible_become_pass=7177
 
 [k8s-cluster:children]
 k8s-master

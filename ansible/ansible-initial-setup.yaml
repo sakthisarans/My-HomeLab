@@ -14,7 +14,7 @@
         update_cache: true
         cache_valid_time: 3600
 
-    - name: Upgrade system packages non-interactively
+    - name: Upgrade system packages
       ansible.builtin.apt:
         upgrade: dist
         autoremove: true
@@ -100,7 +100,7 @@
       changed_when: false
     - name: Extract join command
       ansible.builtin.set_fact:
-        microk8s_join: "{{ addnode_output.stdout | regex_search('join[^\\n]*', multiline=True) | first }}"
+        microk8s_join: "{{ addnode_output.stdout | regex_search('join [^\\n]*--worker', multiline=True) }}"
 
     - name: Ensure join command was found
       ansible.builtin.fail:

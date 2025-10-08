@@ -1,5 +1,4 @@
 # ansible-playbook restore_ghost.yml -e "cert=/home/sakthi/.kube/config resource=storage"
-# ansible-galaxy collection install community.kubernetes
 
 ---
 - name: Restore Ghost Kubernetes manifests from GitHub
@@ -64,3 +63,9 @@
       when:
         - ansible_facts['os_family'] is defined
         - resource == "ingress"
+
+    - name: Cleanup cloned repository
+      ansible.builtin.file:
+        path: "{{ repo_dir }}"
+        state: absent
+      when: skip_cleanup is defined
