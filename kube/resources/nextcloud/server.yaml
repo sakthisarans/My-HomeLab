@@ -21,6 +21,13 @@ spec:
         envFrom:
           - secretRef:
               name: nextcloud-secret
+        resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
         env:
         - name: PUID
           value: "1000"

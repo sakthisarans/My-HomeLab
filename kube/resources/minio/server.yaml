@@ -24,9 +24,12 @@ spec:
         - secretRef:
             name: minio-secret
         resources:
-          limits:
-            memory: "500Mi"
-            cpu: "200m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
         ports:
         - containerPort: 9000
         - containerPort: 9090

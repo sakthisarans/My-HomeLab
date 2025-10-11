@@ -19,9 +19,12 @@ spec:
         - secretRef:
             name: postgres-secret
         resources:
-          limits:
-            memory: "800Mi"
-            cpu: "300m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
         ports:
         - containerPort: 5432
         volumeMounts:

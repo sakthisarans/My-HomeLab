@@ -16,9 +16,12 @@ spec:
       - name: immichml
         image: ghcr.io/immich-app/immich-machine-learning:release
         resources:
-          limits:
-            memory: "3000Mi"
-            cpu: "1000m"
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
         ports:
         - containerPort: 3003
       #   volumeMounts:
